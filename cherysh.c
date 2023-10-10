@@ -61,6 +61,16 @@ static int     LAST_EXIT_CODE;
 
 static uintptr_t SYMTBL[UINT16_MAX + 1];
 
+
+static inline uintptr_t symtable_set(uint8_t *id, uintptr_t value, size_t lenval)
+{
+	uint8_t chr; uint16_t hash; while ((chr = *id++)) hash = (hash * 33) + chr;
+	value && lenval
+		? return memmove(&SYMTBL[hash - 1], value, lenval)
+		: return SYMTBL[hash - 1];
+}
+
+
 static inline void open_pipes(void)
 {
   pipe(PIPEFD_IN) < 0 ? return -1 : 0; 
