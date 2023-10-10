@@ -53,10 +53,21 @@ static size_t ARGC;
 static size_t ENVC;
 
 static int WAIT_SIGNAL;
+static int EXIT_REASON;
 
 static uint8_t **DOQUSH_ARGV;
-static uint8_t	**DOQUSH_SYMTBL;
 static int	 DOQUSH_ARGC;
+
+static inline void open_pipes(void)
+{ pipe(PIPEFD_IN); pipe(PIPEFD_OUT); pipe(PIPEFD_ERR); }
+
+static inline void close_pipes(void)
+{ 
+	int pfds[7] = { 0,
+		PIPE_INR, PIPE_INW, PIPE_OUTR, PIPE_OUTW, PIPE_ERRR, PIPE_ERRW, 
+	};
+	while ((int j = &pfds[0]), *j++) close(j);
+}
 
 static inline void setin_std(void) 
 { IN_FDESC = STDIN; PROC_IN_STREAM = stdin; }
@@ -87,6 +98,31 @@ static inline void setout_path(unsigned char *p)
 static inline void seterr_path(unsigned char *p) 
 { PROC_ERR_STREAM = fopen(p, "rw"); ERR_FDESC = fileno(PROC_ERR_STREAM); }
 
+static inline void open_specin_stdin(void)
+{ SPEC_IN_STREAM = stdin;   }
+
+static inline void open_specout_stdout(void)
+{ SPEC_IN_STREAM = stdout;   }
+
+static inline void open_specerr_stderr(void)
+{ SPEC_IN_STREAM = stderr;   }
+
+static inline void open_specin_path(uint8_t *p)
+{ SPEC_IN_STREAM = fopen(p, "r");   }
+
+static inline void open_specout_path(uint8_t *p)
+{ SPEC_OUT_STREAM = fopen(p, "w");   }
+
+static inline void open_specerr_path(uint8_t *p)
+{ SPEC_ERR_STREAM = fopen(p, "w");   }
+
+
+static inline void close_procio(void) 
+{ fclose(PROC_IN_STREAM); fclose(PROC_OUT_STREAM); fclose(PROC_ERR_STREAM); }
+
+static inline void close_specio(void)
+{ fclose(SPEC_IN_STREAM); fclose(SPEC_OUT_STREAM); fclose(SPEC_ERR_STREAM); }
+
 static inline void setsig_wait(int sig)
 { WAIT_SIGNAL = sig;   }
 
@@ -114,14 +150,30 @@ static inline void set_environ(uint8_t *env)
 	  : (ENV_ARR[ENVC++] = strdup(env)); 
 }
 
-static int reflect(void)
-{
-	PROG_STR = DOQUSH_PATH;
-}
+static inline void free_all(void)
+{ set_argv(NULL); set_environ(NULL); }
 
-int signal_handler(int signum)
-{ if (signum == WAIT_SIGNAL)  }
+
+void exit_action(void) { close_procio(); close_specio(); free_all(); }
+
+
+void signal_handler(int signum)
+{ if (signum == WAIT_SIGNAL) exit(EXIT_REASON);  }
+
 
 static void execute_program(void)
+{
+	if (WAIT_SIGNAL > 0) signal(WAIT_SIGNAL, signal_handler);
+	
+	close_pipes();
+	open_pipes();
+
+	
+		
+	
+
+
+}
+
 
 %}
