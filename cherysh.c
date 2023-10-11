@@ -30,9 +30,12 @@
 
 #define CHERYSH_PATH	CHERYSH_ARGV[0]
 
-static int IN_FDESC;
-static int OUT_FDESC;
-static int ERR_FDESC;
+static int CHL_IN_FDESC;
+static int CHL_OUT_FDESC;
+static int CHL_ERR_FDESC;
+static int PAR_IN_FDESC;
+static int PAR_OUT_FDESC;
+static int PAR_ERR_FDESC;
 
 static int PIPEFD_IN[2];
 static int PIPEFD_OUT[2];
@@ -108,7 +111,28 @@ static inline uintptr_t symtable_insert_str(uint8_t *id, uint8_t *str)
 static inline uintptr_t symtable_insert_float(uint8_t *id, long double flt)
 {    return symtable_set(id, (uintptr_t)flt, sizeof(long double));  }
 
+static inline void hook_stdin(FILE **fp, int *fdp) { *fp = stdin; *fdp = STDIN; }
+static inline void hook_stdout(FILE **fp, int *fdp) { *fp = stdout; *fdp = STDOUT; }
+static inline void hook_stderr(FILE **fp, int *fdp) { *fp = stderr; *fdp = STDERR; }
+static inline void hook_stream(FILE *s, FILE **fp, int *fdp)
+{ *fp = s; *fdp = fileno(*fp);    }
 
+
+static inline int hook_fdesc(int fd, FILE **fp, int *fdp, const char *mode)
+{ 
+	(*fp = fdopen(fd, mode)) < 0 
+		? ERR_EXIT("Error opening filedesc\n") 
+		: NULL;
+       	*fdp = fileno(*fp); 
+}
+
+static inline void hook_path(uint8_t *p, FILE **fp, int *fdp, const char *mode)
+{ 
+	(*fp = fopen(p, mode)) < 0
+		? ERR_EXIT("Error opening file\n")
+		: NULL; 
+	*fdp = fileno(*fp); 
+}
 
 static inline void open_pipes(void)
 {
@@ -122,62 +146,9 @@ static inline void close_pipes(void)
 	int pfds[7] = { 0,
 		PIPE_INR, PIPE_INW, PIPE_OUTR, PIPE_OUTW, PIPE_ERRR, PIPE_ERRW, 
 	};
-	while ((int j = &pfds[0]), *j++) close(j);
+	while ((int fd = &pfds[0]), *fd++) close(fd);
 }
 
-static inline void setin_std(void) 
-{ IN_FDESC = STDIN; CHL_IN_STREAM = stdin; }
-
-static inline void setout_std(void) 
-{ OUT_FDESC = STDOUT; CHL_OUT_STREAM = stdout; }
-
-static inline void seterr_std(void) 
-i{ ERR_FDESC = STDERR; CHL_ERR_STREAM = stderr; }
-
-
-static inline void setin_fd(int fd) 
-{ IN_FDESC = fd; CHL_IN_STREAM = fdopen(fd, "rw"); }
-
-static inline void setout_fd(int fd) 
-{ OUT_FDESC = fd; CHL_OUT_STREAM = fdopen(fd, "rw"); }
-
-static inline void seterr_fd(int fd) 
-{ ERR_FDESC = fd; CHL_ERR_STREAM = fdopen(fd, "rw"); }
-
-
-static inline void setin_path(unsinged char *p) 
-{ CHL_IN_STREAM = fopen(p, "rw"); IN_FDESC = fileno(CHL_IN_STREAM); }
-
-static inline void setout_path(unsigned char *p) 
-{ CHL_OUT_STREAM = fopen(p, "rw"); OUT_FDESC = fileno(CHL_OUT_STREAM); }
-
-static inline void seterr_path(unsigned char *p) 
-{ CHL_ERR_STREAM = fopen(p, "rw"); ERR_FDESC = fileno(CHL_ERR_STREAM); }
-
-static inline void open_specin_stdin(void)
-{ PAR_IN_STREAM = stdin;   }
-
-static inline void open_specout_stdout(void)
-{ PAR_IN_STREAM = stdout;   }
-
-static inline void open_specerr_stderr(void)
-{ PAR_IN_STREAM = stderr;   }
-
-static inline void open_specin_path(uint8_t *p)
-{ PAR_IN_STREAM = fopen(p, "r");   }
-
-static inline void open_specout_path(uint8_t *p)
-{ PAR_OUT_STREAM = fopen(p, "w");   }
-
-static inline void open_specerr_path(uint8_t *p)
-{ PAR_ERR_STREAM = fopen(p, "w");   }
-
-
-static inline void close_procio(void) 
-{ fclose(CHL_IN_STREAM); fclose(CHL_OUT_STREAM); fclose(CHL_ERR_STREAM); }
-
-static inline void close_specio(void)
-{ fclose(PAR_IN_STREAM); fclose(PAR_OUT_STREAM); fclose(PAR_ERR_STREAM); }
 
 static inline void setsig_wait(int sig)
 { WAIT_SIGNAL = sig;   }
@@ -210,7 +181,7 @@ static inline void free_all(void)
 { set_argv(NULL); set_environ(NULL); }
 
 
-void exit_action(void) { close_procio(); close_specio(); free_all(); }
+void exit_action(void) { close_procio(); close_pario(); free_all(); }
 
 
 void signal_handler(int signum)
