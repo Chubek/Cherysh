@@ -83,6 +83,15 @@ static uintptr_t EXEC_CALLBACK_ARGV[ARG_MAX];
 static size_t	 EXEC_CALLBACK_ARGC;
 static uintptr_t EXEC_CALLBACK_RESULT;
 
+static struct Func
+{
+	uint8_t *id;
+	uint8_t *src;
+	uint8_t *argv[ARG_MAX];
+	size_t   argc;
+}
+CURR_FN;
+
 
 static inline struct Quote* quote_make(
 		struct Quote *quote, enum QType type, uintptr_t value)
@@ -117,7 +126,8 @@ static inline uintptr_t symtable_upsert_str(uint8_t *id, uint8_t *str)
 static inline uintptr_t symtable_upsert_float(uint8_t *id, long double flt)
 {    return symtab_upsert(id, (uintptr_t)flt);  }
 
-static inline uintptr_t symtable_upsert_function(uint8_t *id, 
+static inline uintptr_t symtable_upsert_function(uint8_t *id, struct func *fn)
+{    return symtab_upsert(id, (uintptr_t)fn);       }
 
 static inline void hook_stdin(FILE **fp, int *fdp) { *fp = stdin; *fdp = STDIN; }
 static inline void hook_stdout(FILE **fp, int *fdp) { *fp = stdout; *fdp = STDOUT; }
@@ -168,43 +178,59 @@ static inline void exec_callback_addarg(uintptr_t arg)
 static inline void exec_callback_addfn(exec_callback_fn_t fn)
 { EXEC_CALLBACK_FN = fn; }
 
-static inline void exec_callback_lookupfn(uint8_t *id)
-{
-}
-
 static inline void setsig_wait(int sig)
 { WAIT_SIGNAL = sig;   }
 
-static inline void set_prog(uint8_t *prog)
+static inline void set_prog(uint8_t *prog, size_t len)
 {  !prog 
 	? memset(&PROG_STR[0], 0, PATH_MAX) 
-        : strncpy(&PROG_STR[0], 0, PATH_MAX);
+        : strncpy(&PROG_STR[0], 0, len);
 }
 
 static inline void set_environ_dfl(void) { ENV_ARR = environ; }
 
-static inline void set_argv(uint8_t *arg)
+static inline void set_argv(uint8_t *arg, size_t len)
 {
 	ARGC >= ARG_MAX ? ERR_EXIT("Argument overflow\n") : NULL;
 	!arg
 	  ? for ((arg = &ARGV_ARR[0]; arg; free(arg), *arg++))
-	  : (ARGV_ARR[ARGC++] = strdup(arg)); 
+	  : (ARGV_ARR[ARGC++] = strndup(arg, len)); 
 }
 
-static inline void set_environ(uint8_t *env)
+static inline void set_environ(uint8_t *env, size_t len)
 {
 	ENVC >= ARG_MAX ? ERR_EXIT("Environ overflow\n") : NULL;
 	!env
 	  ? for ((env = &ENV_ARR[0]; env; free(env), *env++))
-	  : (ENV_ARR[ENVC++] = strdup(env)); 
+	  : (ENV_ARR[ENVC++] = strndup(env, len)); 
+}
+
+static inline void set_currfnargv(uint8_t *arg, size_t len)
+{ 
+	CURR_FN.argc >= ARG_MAX
+		? ERR_EXIT("Function argument overflow\n")
+		: NULL;
+	arg 
+		? (CURR_FN.argv[CURR_FN.argc++] = strndup(arg, len))
+	        : while ((arg = CURR_FN.argv[--CURR_FN.argc]), free(arg));
 }
 
 static inline void free_all(void)
-{ set_argv(NULL); set_environ(NULL); }
+{ set_argv(NULL, 0); set_environ(NULL, 0); set_currfnargv(NULL, 0);  }
 
+static inline void set_currfn(uint8_t *id)
+{
+	(uintptr_t fnptr = symtable_upsert_function(id, NULL)) == 0
+		? ERR_EXIT("Error function does not exit")
+		: fnptr;
+	struct Func *fn = (struct Func*)fnptr;
+	CURR_FN.id  = fn->id;
+	CURR_FN.src = fn->src;
+	CURR_FN.argv = NULL;
+	CURR_FN.argc = 0;
+}
 
-void exit_action(void) { close_procio(); close_pario(); free_all(); }
-
+void exit_action(void) { free_all(); }
 
 void signal_handler(int signum)
 { 
@@ -267,3 +293,5 @@ static void execute_program(void)
 static void eval_fragment(void)
 { CheryshYYParse(EVAL_READY_STR); }
 
+static void eval_currfn(void)
+{ PROG_STR = CHERYSH_PATH; ARGV_ARR = CURR_FN.argv; execute_program(); }
