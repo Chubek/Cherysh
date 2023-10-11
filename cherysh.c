@@ -152,6 +152,9 @@ static inline void hook_path(uint8_t *p, FILE **fp, int *fdp, const char *mode)
 	*fdp = fileno(*fp); 
 }
 
+static inline void dupfd_into(int *dst, int src) { *dst = dup(src); }
+static inline void redirfd_into(int *dst, int src) { dup2(*dst, src); }
+
 static inline void open_pipes(void)
 {
   pipe(PIPEFD_IN) < 0 ? return -1 : 0; 
