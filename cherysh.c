@@ -78,6 +78,12 @@ static uintptr_t SYMTBL[UINT16_MAX + 1];
 static FILE *SCRIPT_STREAM;
 static uint8_t *EVAL_READY_STR;
 
+static uintptr_t (*exec_callback_fn_t)(uintptr_t[ARG_MAX]) EXEC_CALLBACK_FN;
+static uintptr_t EXEC_CALLBACK_ARGV[ARG_MAX];
+static size_t	 EXEC_CALLBACK_ARGC;
+static uintptr_t EXEC_CALLBACK_RESULT;
+
+
 static inline struct Quote* quote_make(
 		struct Quote *quote, enum QType type, uintptr_t value)
 {
@@ -91,25 +97,27 @@ static inline struct Quote* quote_make(
 	return new_quote;
 }
 
-static inline uintptr_t symtable_set(uint8_t *id, uintptr_t value, size_t lenval)
+static inline uintptr_t symtab_upsert(uint8_t *id, uintptr_t value)
 {
 	uint8_t chr; uint16_t hash; while ((chr = *id++)) hash = (hash * 33) + chr;
-	value && lenval
-		? return memmove(&SYMTBL[hash - 1], value, lenval)
+	value
+		? (SYMTBL[hash - 1] = value, return value)
 		: return SYMTBL[hash - 1];
 }
 
-static inline uintptr_t symtable_insert_quote(uint8_t *id, struct Quote *quote)
-{    return symtable_set(id, (uintptr_t)quote, sizeof(struct Quote));     }
+static inline uintptr_t symtable_upsert_quote(uint8_t *id, struct Quote *quote)
+{    return symtab_upsert(id, (uintptr_t)quote);     }
 
-static inline uintptr_t symtable_insert_int(uint8_t *id, int64_t i)
-{    return symtable_set(id, (uintptr_t)i, sizeof(int64_t));  }
+static inline uintptr_t symtable_upsert_int(uint8_t *id, int64_t i)
+{    return symtab_upsert(id, (uintptr_t)i);  }
 
-static inline uintptr_t symtable_insert_str(uint8_t *id, uint8_t *str)
-{    return symtable_set(id, (uintptr_t)str, sizeof(uint8_t*));  }
+static inline uintptr_t symtable_upsert_str(uint8_t *id, uint8_t *str)
+{    return symtab_upsert(id, (uintptr_t)str);  }
 
-static inline uintptr_t symtable_insert_float(uint8_t *id, long double flt)
-{    return symtable_set(id, (uintptr_t)flt, sizeof(long double));  }
+static inline uintptr_t symtable_upsert_float(uint8_t *id, long double flt)
+{    return symtab_upsert(id, (uintptr_t)flt);  }
+
+static inline uintptr_t symtable_upsert_function(uint8_t *id, 
 
 static inline void hook_stdin(FILE **fp, int *fdp) { *fp = stdin; *fdp = STDIN; }
 static inline void hook_stdout(FILE **fp, int *fdp) { *fp = stdout; *fdp = STDOUT; }
@@ -149,6 +157,20 @@ static inline void close_pipes(void)
 	while ((int fd = &pfds[0]), *fd++) close(fd);
 }
 
+static inline void exec_callback_addarg(uintptr_t arg)
+{ 
+	EXEC_CALLBACK_ARGC >= ARG_MAX
+		? ERR_EXIT("Error exec callback argument overflow\n")
+		: NULL;
+	EXEC_CALLBACK_ARGV[EXEC_CALLBACK_ARGC++] = arg; 
+}
+
+static inline void exec_callback_addfn(exec_callback_fn_t fn)
+{ EXEC_CALLBACK_FN = fn; }
+
+static inline void exec_callback_lookupfn(uint8_t *id)
+{
+}
 
 static inline void setsig_wait(int sig)
 { WAIT_SIGNAL = sig;   }
@@ -219,6 +241,9 @@ static void handle_parent(void)
 		: NULL;
 
 }
+
+static void exec_callback(void)
+{ EXEC_CALLBACK_RESULT =  EXEC_CALLBACK_FN(EXEC_CALLBACK_ARGV[]); }
 
 static void execute_program(void)
 {
