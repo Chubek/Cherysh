@@ -15,6 +15,8 @@
 #define LOCAL 	static
 #define INLINE 	static inline
 
+extern char **environ
+
 LOCAL FILE 	 *CURR_IN_STREAM;
 LOCAL FILE       *CURR_OUT_STREAM;
 LOCAL FILE       *CURR_ERR_STREAM;
@@ -35,6 +37,22 @@ LOCAL int	  PIPE_ERR[2];
 
 LOCAL int	  LAST_EXIT_STAT:
 
+LOCAL uint8_t	 **SHELL_ARGV;
+LOCAL size_t	 SHELL_ARGC;
+LOCAL uint8_t	 ENV = environ;
+LOCAL uint8_t	 HOME[MAX_PATH + 1];
+LOCAL uint8_t    LINENO[INT8_MAX + 1];
+LOCAL uint8_t	 PATH[MAX_PATH + 1];
+LOCAL uint8_t    PS1[UINT8_MAX + 1], PS2[UINT8_MAX + 1], PS4[UINT8_MAX + 1];
+LOCAL uint8_t    PWD[MAX_PATH + 1];
+
+
+
+
+
+
+
+
 INLINE uint8_t *gc_strndup(uint8_t *s, size_t l)
 { uint8_t *d = (uint8_t*)GC_MALLOC(l + 1); d[l] = 0; u8_strncpy(d, s, l); return d; }
 
@@ -48,6 +66,9 @@ INLINE void open_file_fdesc(FILE **s,
 INLINE void swap_streams(FILE **s1, FILE **s2)
 { FILE *s3 = *s1; *s1 = *s2; *s2 = s3;   }
 
+
+
+
 INLINE void init_argv(void)
 { uint8_t *arg; while ((arg = CURR_ARGV[--CURR_ARGC])) arg = NULL; }
 
@@ -59,6 +80,12 @@ INLINE void blank_prog(void)
 
 INLINE void set_prog(uint8_t *p, size_t len)
 { u8_strncpy(&CURR_PROG[0], &p[0], len); }
+
+
+
+
+
+
 
 #define IN_R PIPE_IN[0]
 #define IN_W PIPE_IN[1]
@@ -73,9 +100,8 @@ INLINE void set_prog(uint8_t *p, size_t len)
 #define STDOUT 	fileno(stdout)
 #define STDERR  fileno(stderr)
 
-extern char **environ;
 
-INLINE void exec_program(void)
+LOCAL void exec_program(void)
 {
 	pipe(PIPE_IN); pipe(PIPE_OUT); pipe(PIPE_ERR);
 
@@ -119,6 +145,47 @@ INLINE void exec_program(void)
 		close(indup); close(outdup); close(errdup);
 	}
 }
+
+
+INLINE void set_pwd(void)
+{ getcwd(&PWD[0], MAX_PATH); }
+
+INLINE uint8_t *get_pwd(void)
+{ return &PWD[0]; }
+
+INLINE void set_ps1(uint8_t *ps1)
+{ u8_strncpy(&PS1[0], ps1, UINT8_MAX); }
+
+INLINE uint8_t *get_ps1(void)
+{ return &PS1[0]; }
+
+
+INLINE void set_ps1(uint8_t *ps1)
+{ u8_strncpy(&PS1[0], ps1, UINT8_MAX); }
+
+INLINE uint8_t *get_ps1(void)
+{ return &PS1[0]; }
+
+
+INLINE void set_ps2(uint8_t *ps2)
+{ u8_strncpy(&PS2[0], ps2, UINT8_MAX); }
+
+INLINE uint8_t *get_ps2(void)
+{ return &PS2[0]; }
+
+
+INLINE void set_ps4(uint8_t *ps4)
+{ u8_strncpy(&PS4[0], ps4, UINT8_MAX); }
+
+INLINE uint8_t *get_ps4(void)
+{ return &PS4[0]; }
+
+
+
+
+
+
+
 
 
 
